@@ -6,7 +6,8 @@
 #include <string.h>
 #include <sys/time.h>
 
-static double timer() {
+static double timer() 
+{
     
     struct timeval tp;
     gettimeofday(&tp, NULL);
@@ -23,28 +24,33 @@ int my_Allgather(int *sendbuf, int n, int nprocs, int *recvbuf, int rank)
         recvbuf[i] = 0;
     }
 
-    memcpy((int *) &recvbuf[rank*n], (int *) sendbuf, n * sizeof(int));
+    memcpy( &recvbuf[rank*n], sendbuf, n * sizeof(int));
     
     /* recursive doubling-based code goes here */
     int maxLevel = (int) log2((double)nprocs);
-    int otherRank, thePow, start = rank, otherStart;    
-    MPI_Status stat1, stat2;
-    for (i=0; i < maxLevel; i++){
-    thePow = (int) pow(2.0, i);
+    int rank2;
+    int power;
+    int start = rank;
+    int start2;  
+    MPI_Status stat;
 
-    // Finds rank to communicate by emulating addition
-    // or subtraction by 2^i
-    otherRank = rank ^ (1 << i);
-    
-    MPI_Sendrecv(&start, 1, MPI_INT, otherRank, 0, &otherStart, 1, MPI_INT, otherRank, 0, MPI_COMM_WORLD, &stat1);
-    MPI_Sendrecv(&recvbuf[start*n], n*thePow, MPI_INT, otherRank, 1, &recvbuf[otherStart*n], n*thePow, MPI_INT, otherRank, 1, MPI_COMM_WORLD, &stat2);
+    for (i=0; i < maxLevel; i++)
+    {
+        power = (int) pow(2.0, i);
 
-    if (otherStart < start) 
-        start = otherStart;
-    
-    MPI_Barrier(MPI_COMM_WORLD);
+        // Emulate signed addition by some 2^i
+        rank2 = rank ^ (1 << i);
+        
+        MPI_Sendrecv(&start, 1, MPI_INT, rank2, 0, &start2, 1, MPI_INT, rank2, 0, MPI_COMM_WORLD, &stat);
+        MPI_Sendrecv(&recvbuf[start*n], n*power, MPI_INT, rank2, 1, &recvbuf[start2*n], n*power, MPI_INT, rank2, 1, MPI_COMM_WORLD, &stat);
+
+        if (start2 < start) 
+            start = start2;
+        
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
     return 0;
-}
+} 
 
 int main(int argc, char **argv) 
 {
